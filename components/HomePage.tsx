@@ -9,6 +9,7 @@ import TrendingSong from './TrendingSong';
 
 interface HomePageProps {
   songs: Song[];
+  personalizedSongs: Song[];
   onSongPlay: (song: Song) => void;
   formatNumber: (num: number) => string;
   onAddToPlaylist: (song: Song) => void;
@@ -20,7 +21,7 @@ interface HomePageProps {
 }
 
 
-const HomePage: React.FC<HomePageProps> = ({ songs, onSongPlay, formatNumber, onAddToPlaylist, onAddToQueue, imageUrls,onLoadMore,hasMoreSongs, recentlyPlayedSongs }) => {
+const HomePage: React.FC<HomePageProps> = ({ songs, personalizedSongs, onSongPlay, formatNumber, onAddToPlaylist, onAddToQueue, imageUrls,onLoadMore,hasMoreSongs, recentlyPlayedSongs }) => {
   const { isDarkMode } = useTheme();
   const { user } = useAuth();
   
@@ -126,23 +127,91 @@ const HomePage: React.FC<HomePageProps> = ({ songs, onSongPlay, formatNumber, on
         {/* Recommendations Section */}
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold">Made for you</h2>
+            <h2 className="text-xl font-semibold">Made for You</h2>
             <button className="text-purple-400 text-sm font-medium">See all</button>
           </div>
           <div className="space-y-3">
-            {songs.map((song) => (
-              <SongCard 
-                key={song.id}
-                song={{ ...song, image: imageUrls[song.id] || '' }}
-                onPlay={onSongPlay}
-                formatNumber={formatNumber}
-                onAddToPlaylist={onAddToPlaylist}
-                onAddToQueue={onAddToQueue}
-                cachedImageUrl={imageUrls[song.id]}
-              />
-            ))}
+            {personalizedSongs.length > 0 ? (
+              personalizedSongs.map((song) => (
+                <SongCard
+                  key={song.id}
+                  song={{ ...song, image: imageUrls[song.id] || '' }}
+                  onPlay={onSongPlay}
+                  formatNumber={formatNumber}
+                  onAddToPlaylist={onAddToPlaylist}
+                  onAddToQueue={onAddToQueue}
+                  cachedImageUrl={imageUrls[song.id]}
+                />
+              ))
+            ) : (
+              // Fallback to regular songs if no personalized songs available
+              songs.map((song) => (
+                <SongCard
+                  key={song.id}
+                  song={{ ...song, image: imageUrls[song.id] || '' }}
+                  onPlay={onSongPlay}
+                  formatNumber={formatNumber}
+                  onAddToPlaylist={onAddToPlaylist}
+                  onAddToQueue={onAddToQueue}
+                  cachedImageUrl={imageUrls[song.id]}
+                />
+              ))
+            )}
           </div>
+          
+          {/* Show regular songs section if we have personalized songs */}
+          {personalizedSongs.length > 0 && (
+            <div className="mt-8">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold">Trending Now</h2>
+                <button className="text-purple-400 text-sm font-medium">See all</button>
+              </div>
+              <div className="space-y-3">
+                {songs.map((song) => (
+                  <SongCard
+                    key={song.id}
+                    song={{ ...song, image: imageUrls[song.id] || '' }}
+                    onPlay={onSongPlay}
+                    formatNumber={formatNumber}
+                    onAddToPlaylist={onAddToPlaylist}
+                    onAddToQueue={onAddToQueue}
+                    cachedImageUrl={imageUrls[song.id]}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {/* Load More Button - only show for regular songs when no personalized songs */}
+          {personalizedSongs.length === 0 && hasMoreSongs && (
+            <div className="flex justify-center mt-6">
+              <button
+                onClick={onLoadMore}
+                className={`flex items-center space-x-2 px-6 py-3 ${
+                  isDarkMode ? 'bg-gray-800 hover:bg-gray-700 border-gray-700' : 'bg-white hover:bg-gray-50 border-gray-200'
+                } border rounded-full transition-colors`}
+              >
+                <Plus size={18} className="text-purple-400" />
+                <span className={isDarkMode ? 'text-white' : 'text-gray-900'}>Load More</span>
+              </button>
+            </div>
+          )}
         </div>
+        
+        {/* Load More for Trending section when personalized songs exist */}
+        {personalizedSongs.length > 0 && hasMoreSongs && (
+          <div className="flex justify-center mt-6">
+            <button
+              onClick={onLoadMore}
+              className={`flex items-center space-x-2 px-6 py-3 ${
+                isDarkMode ? 'bg-gray-800 hover:bg-gray-700 border-gray-700' : 'bg-white hover:bg-gray-50 border-gray-200'
+              } border rounded-full transition-colors`}
+            >
+              <Plus size={18} className="text-purple-400" />
+              <span className={isDarkMode ? 'text-white' : 'text-gray-900'}>Load More Trending</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
