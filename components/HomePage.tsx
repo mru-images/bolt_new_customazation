@@ -131,34 +131,6 @@ const HomePage: React.FC<HomePageProps> = ({ songs, onSongPlay, formatNumber, on
           </div>
           <div className="space-y-3">
             {songs.map((song) => (
-              <SongCard
-                key={song.id}
-                song={{ ...song, image: imageUrls[song.id] || '' }}
-                onPlay={onSongPlay}
-                formatNumber={formatNumber}
-                onAddToPlaylist={onAddToPlaylist}
-                onAddToQueue={onAddToQueue}
-                cachedImageUrl={imageUrls[song.id]}
-              />
-            ))}
-          </div>
-          
-          {/* Load More Button */}
-          {hasMoreSongs && (
-  <div className="flex justify-center mt-6">
-    <button
-      onClick={onLoadMore}
-      className={`flex items-center space-x-2 px-6 py-3 ${
-        isDarkMode ? 'bg-gray-800 hover:bg-gray-700 border-gray-700' : 'bg-white hover:bg-gray-50 border-gray-200'
-      } border rounded-full transition-colors`}
-    >
-      <Plus size={18} className="text-purple-400" />
-      <span className={isDarkMode ? 'text-white' : 'text-gray-900'}>Load More</span>
-    </button>
-  </div>
-)}
-
-        </div>
       </div>
     </div>
   );

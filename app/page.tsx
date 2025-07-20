@@ -26,6 +26,7 @@ function MusicPlayerContent() {
   const { user } = useAuth();
   const {
     songs,
+    personalizedSongs,
     playlists,
     likedSongs,
     recentlyPlayedSongs,
@@ -737,6 +738,7 @@ const handleNext = async () => {
       case 'home':
         return <HomePage
                 songs={displayedSongs}
+                personalizedSongs={personalizedSongs}
                 recentlyPlayedSongs={recentlyPlayedSongs}
                 onSongPlay={handleSongPlay}
                 formatNumber={formatNumber}
@@ -761,6 +763,7 @@ const handleNext = async () => {
       default:
         return <HomePage
               songs={displayedSongs}
+              personalizedSongs={personalizedSongs}
               recentlyPlayedSongs={recentlyPlayedSongs}
               onSongPlay={handleSongPlay}
               formatNumber={formatNumber}

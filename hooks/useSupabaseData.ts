@@ -9,6 +9,7 @@ export function useSupabaseData(user: User | null) {
   const [likedSongs, setLikedSongs] = useState<Set<number>>(new Set())
   const [lastPlayedSong, setLastPlayedSong] = useState<Song | null>(null)
   const [recentlyPlayedSongs, setRecentlyPlayedSongs] = useState<Song[]>([])
+  const [personalizedSongs, setPersonalizedSongs] = useState<Song[]>([])
   const [loading, setLoading] = useState(true)
   const [currentSongStartTime, setCurrentSongStartTime] = useState<Date | null>(null)
   const currentSongRef = useRef<string | null>(null)
@@ -333,6 +334,190 @@ export function useSupabaseData(user: User | null) {
       return [];
     }
   };
+
+  // Get personalized songs based on user's top 10 history
+  const fetchPersonalizedSongs = async () => {
+    if (!user) {
+      setPersonalizedSongs([])
+      return
+    }
+
+    try {
+      console.log('🎯 Fetching personalized songs based on listening history');
+      
+      // 1. Get user's top 10 songs from history
+      const { data: historyData, error: historyError } = await supabase
+        .from('history')
+        .select(`
+          song_id,
+          minutes_listened,
+          songs (*)
+        `)
+        .eq('user_id', user.id)
+        .order('minutes_listened', { ascending: false })
+        .limit(10)
+
+      if (historyError) {
+        console.error('❌ Error fetching history for personalization:', historyError)
+        setPersonalizedSongs([])
+        return
+      }
+
+      if (!historyData || historyData.length === 0) {
+        console.log('⚠️ No listening history found, using trending songs')
+        // Fallback to trending songs if no history
+        const { data: trendingSongs } = await supabase
+          .from('songs')
+          .select('*')
+          .order('views', { ascending: false })
+          .limit(20)
+        
+        if (trendingSongs) {
+          const { data: likedData } = await supabase
+            .from('liked_songs')
+            .select('song_id')
+            .eq('user_id', user.id)
+          
+          const userLikedSongs = new Set<number>()
+          if (likedData) {
+            likedData.forEach(item => userLikedSongs.add(item.song_id))
+          }
+          
+          const converted = trendingSongs.map(song => 
+            convertDatabaseSong(song, userLikedSongs.has(song.file_id))
+          )
+          setPersonalizedSongs(converted)
+        }
+        return
+      }
+
+      // 2. Extract common tags and artists from top songs
+      const topSongs = historyData
+        .filter(item => item.songs)
+        .map(item => item.songs)
+      
+      const tagCounts = new Map<string, number>()
+      const artistCounts = new Map<string, number>()
+      const historySongIds = new Set<number>()
+      
+      topSongs.forEach(song => {
+        historySongIds.add(song.file_id)
+        
+        // Count tags
+        if (song.tags && Array.isArray(song.tags)) {
+          song.tags.forEach((tag: string) => {
+            const normalizedTag = tag.toLowerCase().trim()
+            tagCounts.set(normalizedTag, (tagCounts.get(normalizedTag) || 0) + 1)
+          })
+        }
+        
+        // Count artists
+        const normalizedArtist = song.artist.toLowerCase().trim()
+        artistCounts.set(normalizedArtist, (artistCounts.get(normalizedArtist) || 0) + 1)
+      })
+
+      // Get most common tags and artists
+      const commonTags = Array.from(tagCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([tag]) => tag)
+      
+      const commonArtists = Array.from(artistCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([artist]) => artist)
+
+      console.log('🏷️ Common tags from history:', commonTags)
+      console.log('🎤 Common artists from history:', commonArtists)
+
+      // 3. Fetch all songs and filter out history songs
+      const { data: allSongs, error: songsError } = await supabase
+        .from('songs')
+        .select('*')
+
+      if (songsError) {
+        console.error('❌ Error fetching songs for personalization:', songsError)
+        setPersonalizedSongs([])
+        return
+      }
+
+      if (!allSongs || allSongs.length === 0) {
+        setPersonalizedSongs([])
+        return
+      }
+
+      // 4. Get user's liked songs
+      const { data: likedData } = await supabase
+        .from('liked_songs')
+        .select('song_id')
+        .eq('user_id', user.id)
+      
+      const userLikedSongs = new Set<number>()
+      if (likedData) {
+        likedData.forEach(item => userLikedSongs.add(item.song_id))
+      }
+
+      // 5. Filter and score songs
+      const availableSongs = allSongs.filter(song => 
+        !historySongIds.has(song.file_id) // Exclude songs from history
+      )
+
+      console.log(`🎵 Available songs after filtering history: ${availableSongs.length}`)
+
+      if (availableSongs.length === 0) {
+        setPersonalizedSongs([])
+        return
+      }
+
+      // 6. Score songs based on common tags and artists
+      const scoredSongs = availableSongs.map(song => {
+        let score = 0
+
+        // Score based on common tags (highest priority)
+        if (song.tags && Array.isArray(song.tags)) {
+          const songTags = song.tags.map((tag: string) => tag.toLowerCase().trim())
+          const matchingTags = songTags.filter(tag => commonTags.includes(tag))
+          score += matchingTags.length * 20 // High weight for tag matching
+        }
+
+        // Score based on common artists
+        const songArtist = song.artist.toLowerCase().trim()
+        if (commonArtists.includes(songArtist)) {
+          score += 25 // High weight for artist matching
+        }
+
+        // Bonus for liked songs
+        if (userLikedSongs.has(song.file_id)) {
+          score += 10
+        }
+
+        // General popularity boost (lower weight)
+        score += Math.log(1 + (song.likes || 0)) * 2
+        score += Math.log(1 + (song.views || 0)) * 1
+
+        // Add small randomness to avoid repetition
+        score += Math.random() * 3
+
+        return {
+          song: convertDatabaseSong(song, userLikedSongs.has(song.file_id)),
+          score
+        }
+      })
+
+      // 7. Sort by score and return top recommendations
+      const recommendations = scoredSongs
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 30) // Get top 30 personalized songs
+        .map(entry => entry.song)
+
+      console.log('🎯 Personalized recommendations:', recommendations.slice(0, 5).map(s => `${s.name} by ${s.artist}`))
+      setPersonalizedSongs(recommendations)
+      
+    } catch (error) {
+      console.error('❌ Error in fetchPersonalizedSongs:', error)
+      setPersonalizedSongs([])
+    }
+  }
 
   // Fetch recently played songs based on listening history
   const fetchRecentlyPlayed = async () => {
@@ -754,7 +939,7 @@ try {
 
       try {
         setLoading(true)
-        await Promise.all([fetchSongs(), fetchPlaylists(), fetchRecentlyPlayed()])
+        await Promise.all([fetchSongs(), fetchPlaylists(), fetchRecentlyPlayed(), fetchPersonalizedSongs()])
       } catch (error) {
         console.error('Error loading data:', error)
       } finally {
@@ -767,6 +952,7 @@ try {
 
   return {
     songs,
+    personalizedSongs,
     playlists,
     likedSongs: songs.filter(song => song.isLiked),
     recentlyPlayedSongs,
@@ -784,6 +970,7 @@ try {
       fetchSongs()
       fetchPlaylists()
       fetchRecentlyPlayed()
+      fetchPersonalizedSongs()
     },
     getPersonalizedSongs,
     getSmartPersonalizedSongs
