@@ -131,6 +131,18 @@ const HomePage: React.FC<HomePageProps> = ({ songs, onSongPlay, formatNumber, on
           </div>
           <div className="space-y-3">
             {songs.map((song) => (
+              <SongCard 
+                key={song.id}
+                song={{ ...song, image: imageUrls[song.id] || '' }}
+                onPlay={onSongPlay}
+                formatNumber={formatNumber}
+                onAddToPlaylist={onAddToPlaylist}
+                onAddToQueue={onAddToQueue}
+                cachedImageUrl={imageUrls[song.id]}
+              />
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
